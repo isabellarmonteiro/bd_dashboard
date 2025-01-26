@@ -1,0 +1,38 @@
+---
+title: "Innovations"
+format: 
+  dashboard:
+    logo: "images/CGIAR.png"
+    orientation: columns
+
+---
+
+## Column {width="20%"}
+Hey, this is a column
+
+```{r, loadpackages}
+#| echo: false
+#| include: false
+
+library(tidyverse)
+
+```
+
+## Column {width="80%"}
+
+Hey this is another column
+
+
+```{r, printsstarwars}
+
+head(starwars)
+
+```
+
+## Row {width="50%"}
+
+
+
+## Row {width="50%"}
+
+
