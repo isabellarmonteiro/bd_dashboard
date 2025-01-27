@@ -15,80 +15,12 @@ library(httr2)
 library(sf)
 library(leaflet)
 library(gt)
-library(haven)
-library(bangladesh)
-library(tmap)
 
 ```
 
 
 # Rice - Boro
 
-
-
-
-
-
-```{r}
-rice_w3 <- read_dta("data/district_rice_wave_3.dta")
-
-# Get Bangladesh map and add rice variety data
-map_bangladesh <- get_map(level = "district")
-map_bangladesh$brri_dhan_28 <- rice_w3$percent_28
-
-# Function to plot Bangladesh maps
-bd_plot <- function(level = "district", type = "interactive") {
-  tmap_mode(ifelse(type == "static", "plot", "view"))
-  
-  switch(tolower(level),
-    country = tm_shape(bangladesh::map_country) + tm_polygons("Country", legend.show = FALSE),
-    division = tm_shape(bangladesh::map_division) + 
-               tm_polygons("Division", legend.show = FALSE) + 
-               tm_text("Division"),
-    district = tm_shape(map_bangladesh) + 
-               tm_polygons("brri_dhan_28", palette = "Greens", id = "District", 
-                           breaks = seq(0, 1, 0.1)),
-    upazila = tm_shape(bangladesh::map_upazila) + tm_polygons("Division", id = "Upazila"),
-    union = tm_shape(bangladesh::map_union) + tm_polygons("Division", id = "Union"),
-    stop('Invalid level. Choose from: "country", "division", "district", "upazila", "union".')
-  )
-}
-
-# Plot interactive district-level map
-boro_28= bd_plot(level = "district", type = "interactive")
-
-```
-
-
-```{r}
-rice_w3 <- read_dta("data/district_rice_wave_3.dta")
-
-# Get Bangladesh map and add rice variety data
-map_bangladesh <- get_map(level = "district")
-map_bangladesh$brri_dhan_29 <- rice_w3$percent_29
-
-# Function to plot Bangladesh maps
-bd_plot <- function(level = "district", type = "interactive") {
-  tmap_mode(ifelse(type == "static", "plot", "view"))
-  
-  switch(tolower(level),
-    country = tm_shape(bangladesh::map_country) + tm_polygons("Country", legend.show = FALSE),
-    division = tm_shape(bangladesh::map_division) + 
-               tm_polygons("Division", legend.show = FALSE) + 
-               tm_text("Division"),
-    district = tm_shape(map_bangladesh) + 
-               tm_polygons("brri_dhan_29", palette = "Greens", id = "District", 
-                           breaks = seq(0, 1, 0.1)),
-    upazila = tm_shape(bangladesh::map_upazila) + tm_polygons("Division", id = "Upazila"),
-    union = tm_shape(bangladesh::map_union) + tm_polygons("Division", id = "Union"),
-    stop('Invalid level. Choose from: "country", "division", "district", "upazila", "union".')
-  )
-}
-
-# Plot interactive district-level map
-boro_29= bd_plot(level = "district", type = "interactive")
-
-```
 
 
 
@@ -204,22 +136,16 @@ list(
 
 ### Row {height="40%" .tabset}
 
-```{r}
-#| title: BRRI dhan-28
+#### BRRI dhan-28
 
-boro_28
-
-
-```
+<iframe src="images/brri_28.html" width="100%" height="500px" style="border: none;"></iframe> 
 
 
-```{r}
-#| title: BRRI dhan-29
+#### BRRI dhan-29
 
-boro_29
+<iframe src="images/brri_29.html" width="100%" height="500px" style="border: none;"></iframe> 
 
 
-```
 
 
 # Rice - Aman {orientation="columns"}
