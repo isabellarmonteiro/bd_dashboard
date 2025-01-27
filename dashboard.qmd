@@ -7,32 +7,342 @@ format:
 
 ---
 
-## Column {width="20%"}
-Hey, this is a column
 
-```{r, loadpackages}
-#| echo: false
-#| include: false
-
+```{r}
+#| message: false
 library(tidyverse)
+library(httr2)
+library(sf)
+library(leaflet)
+library(gt)
+library(haven)
+library(bangladesh)
+library(tmap)
 
 ```
 
-## Column {width="80%"}
 
-Hey this is another column
+# Rice - Boro
+
+```{r}
+# Get data from GeoNet
+# MMI = 3, weak or above
+req <- request("https://api.geonet.org.nz/quake?MMI=3") |> 
+  req_headers("Accept"="application/vnd.geo+json")
+resp <- req_perform(req)
+recent_quakes <- resp |> 
+  resp_body_string() |> 
+  st_read(quiet = TRUE)
+```
 
 
-```{r, printsstarwars}
 
-head(starwars)
+
+
+```{r}
+# Prettier times and dates
+recent_quakes <- recent_quakes |> 
+  arrange(desc(time)) |> 
+  mutate(
+    time = force_tz(time, "Pacific/Auckland"),
+    pretty_time = format(time, "%I:%M %p"),
+    days_ago = today(tzone = "Pacific/Auckland") - date(time),
+    days_ago = case_when(
+      days_ago == 0 ~ "Today",
+      days_ago == 1 ~ "Yesterday",
+      TRUE ~ paste0(days_ago, " days ago")
+    )
+  )
+now_nz <- now(tzone = "Pacific/Auckland")
+last_24 <- recent_quakes |> filter(time > (now_nz - hours(24)))
+n_24 <- nrow(last_24)
+hours_last <- round(difftime(now_nz, recent_quakes$time[1], units = "hours"))
+```
+
+```{r}
+mag_pal <- colorBin("inferno", domain = 1:8, bins = c(0:5, 8))
+
+quake_map <- recent_quakes |> 
+  leaflet() |> 
+  addCircleMarkers(
+    color = ~ mag_pal(magnitude),
+    stroke = FALSE,
+    fillOpacity = 0.5,
+    radius = ~ scales::rescale(sqrt(magnitude), c(1, 10)),
+    label = ~ paste(
+      date(time), pretty_time, "<br/>",
+      "Magnitude:", round(magnitude, 1), "<br/>", 
+      "Depth:",  round(depth), " km"
+      ) |> map(html),
+    labelOptions = c(textsize = "15px")) |> 
+  addLegend(title = "Magnitude", colors = mag_pal(0:5), labels = c("<1", 1:4,">5")) |> 
+  addTiles("http://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", options = tileOptions(minZoom = 5, maxZoom = 10)) 
+```
+
+
+```{r}
+rice_w3 <- read_dta("data/district_rice_wave_3.dta")
+
+# Get Bangladesh map and add rice variety data
+map_bangladesh <- get_map(level = "district")
+map_bangladesh$brri_dhan_28 <- rice_w3$percent_28
+
+# Function to plot Bangladesh maps
+bd_plot <- function(level = "district", type = "interactive") {
+  tmap_mode(ifelse(type == "static", "plot", "view"))
+  
+  switch(tolower(level),
+    country = tm_shape(bangladesh::map_country) + tm_polygons("Country", legend.show = FALSE),
+    division = tm_shape(bangladesh::map_division) + 
+               tm_polygons("Division", legend.show = FALSE) + 
+               tm_text("Division"),
+    district = tm_shape(map_bangladesh) + 
+               tm_polygons("brri_dhan_28", palette = "Greens", id = "District", 
+                           breaks = seq(0, 1, 0.1)),
+    upazila = tm_shape(bangladesh::map_upazila) + tm_polygons("Division", id = "Upazila"),
+    union = tm_shape(bangladesh::map_union) + tm_polygons("Division", id = "Union"),
+    stop('Invalid level. Choose from: "country", "division", "district", "upazila", "union".')
+  )
+}
+
+# Plot interactive district-level map
+boro_28= bd_plot(level = "district", type = "interactive")
 
 ```
 
-## Row {width="50%"}
+
+```{r}
+rice_w3 <- read_dta("data/district_rice_wave_3.dta")
+
+# Get Bangladesh map and add rice variety data
+map_bangladesh <- get_map(level = "district")
+map_bangladesh$brri_dhan_29 <- rice_w3$percent_29
+
+# Function to plot Bangladesh maps
+bd_plot <- function(level = "district", type = "interactive") {
+  tmap_mode(ifelse(type == "static", "plot", "view"))
+  
+  switch(tolower(level),
+    country = tm_shape(bangladesh::map_country) + tm_polygons("Country", legend.show = FALSE),
+    division = tm_shape(bangladesh::map_division) + 
+               tm_polygons("Division", legend.show = FALSE) + 
+               tm_text("Division"),
+    district = tm_shape(map_bangladesh) + 
+               tm_polygons("brri_dhan_29", palette = "Greens", id = "District", 
+                           breaks = seq(0, 1, 0.1)),
+    upazila = tm_shape(bangladesh::map_upazila) + tm_polygons("Division", id = "Upazila"),
+    union = tm_shape(bangladesh::map_union) + tm_polygons("Division", id = "Union"),
+    stop('Invalid level. Choose from: "country", "division", "district", "upazila", "union".')
+  )
+}
+
+# Plot interactive district-level map
+boro_29= bd_plot(level = "district", type = "interactive")
+
+```
+
+
+```{r}
+mag_hist <- recent_quakes |> 
+  ggplot(aes(x = magnitude)) +
+  geom_histogram()
+```
+
+```{r}
+timeline <- recent_quakes |> 
+  ggplot(aes(x = time, y = 0)) +
+  geom_point()
+```
+
+
+```{r}
+# Create n most recent table
+n <- 10
+top_n <- recent_quakes |> 
+  slice(1:n) |> 
+  as.data.frame() |> 
+  select(magnitude, days_ago, pretty_time, locality, depth) 
+
+top_n_table <- top_n |> 
+  gt() |> 
+  cols_label(
+    days_ago = "",
+    locality = "Location",
+    magnitude = "Magnitude",
+    depth = "Depth",
+    pretty_time = ""
+  ) |> 
+  fmt_integer(
+    columns = depth, 
+    pattern = "{x} km"
+  ) |> 
+  fmt_number(
+    columns = magnitude,
+    decimals = 1
+  ) |> 
+  data_color(
+    columns = "magnitude",
+    fn = mag_pal
+  ) |>
+  tab_header(
+    title = md("**Last 10 Earthquakes**")
+  ) |> 
+  tab_source_note(
+    source_note = md(paste("Retrieved from the [GeoNet API](https://api.geonet.org.nz/) at", format(now_nz, "%Y/%m/%d %H:%M %Z")))
+  )
+```
 
 
 
-## Row {width="50%"}
+
+## Column
+
+### Row 
+
+```{r}
+#| component: valuebox
+#| title: Latest Adoption Estimates
+list(
+  icon = "calendar-week",
+  color = "dark",
+  value = 2018
+)
+```
+
+```{r}
+#| component: valuebox
+#| title: Share of Boro Area - CGIAR-derived varieties
+list(
+  icon = "pin-map",
+  color = "dark",
+  value = "67%"
+)
+```
+
+### Row
+
+<style>
+/* Custom Table Styling */
+.custom-table {
+  background-color: black; /* Black background */
+  border-collapse: collapse;
+  width: 100%;
+  margin: 20px 0;
+  font-size: 1rem;
+  color: white; /* White text */
+}
+
+.custom-table th {
+  background-color: #333; /* Dark gray for header */
+  color: white;
+  text-align: left;
+  padding: 8px;
+}
+
+.custom-table th, .custom-table td {
+  border: 1px solid #555; /* Dark gray border */
+  padding: 8px;
+}
+
+.custom-table tr:nth-child(even) {
+  background-color: #222; /* Slightly lighter black for alternating rows */
+}
+
+.custom-table tr:hover {
+  background-color: #444; /* Dark gray highlight on hover */
+}
+</style>
+
+<table class="custom-table">
+   <caption style="color: white; font-weight: bold;">* This survey is non-representative. Furthermore, the North-western region of Bangladesh is very drought prone, and was therefore the target of AWD dissemination throughout the years. Adoption rates are therefore likely to be overestimated by these figures.</caption>
+   <thead>
+      <tr>
+         <th>Innovation</th>
+         <th>Description</th>
+         <th>Best Reach Estimate</th>
+         <th>Source</th>
+         <th>Attribution</th>
+      </tr>
+   </thead>
+   <tbody>
+      <tr>
+         <td>BRRI dhan-28 (1994)</td>
+         <td>High yield advantage, Early maturing</td>
+         <td>Covered 32.9% of Boro rice area</td>
+         <td>BIHS 2018</td>
+         <td>1 IRRI line as parent</td>
+      </tr>
+      <tr>
+         <td>BRRI dhan-29 (1994)</td>
+         <td>High yield advantage, Disease resistant</td>
+         <td>Covered 29.3% of Boro rice area</td>
+         <td>BIHS 2018</td>
+         <td>Other IRRI ancestry</td>
+      </tr>
+      <tr>
+         <td>Other IRRI-derived varieties</td>
+         <td>Residual share of Boro plots cultivated with minor varieties that have some IRRI ancestry</td>
+         <td>Covered 4.86% of Boro rice area</td>
+         <td>BIHS 2018</td>
+         <td>Between those with one and two IRRI parents<br>+ those with other IRRI ancestry</td>
+      </tr>
+      
+         <tr>
+         <td>Alternate Wetting and Drying</td>
+         <td>Water-saving irrigation technique where rice fields are periodically flooded and allowed to dry, reducing water usage while maintaining crop yields.</td>
+         <td>In a sample of farmers in north-western Bangladesh, 21.3 % farm households had adopted AWD during the Boro season * </td>
+         <td><a href="https://www.sciencedirect.com/science/article/pii/S026483771931868X#:~:text=However%2C%20AWD%20adoption%20in%20Bangladesh,diffusion%20of%20water%2Dsaving%20technologies." target="_blank">Alauddin et al, 2020</a></td>
+         <td>Between those with one and two IRRI parents<br>+ those with other IRRI ancestry</td>
+      </tr>
+   </tbody>
+</table>
 
 
+
+## Column
+
+
+### Row {height="40%" .tabset}
+
+```{r}
+#| title: BRRI dhan-28
+
+boro_28
+
+quake_map
+
+```
+
+
+```{r}
+#| title: BRRI dhan-29
+
+boro_29
+quake_map
+
+```
+
+
+# Rice - Aman {orientation="columns"}
+
+
+
+
+# Fish {orientation="columns"}
+
+
+
+
+# Lentils {orientation="columns"}
+
+
+
+# Maize {orientation="columns"}
+
+
+# Wheat {orientation="columns"}
+
+
+# Potatos {orientation="columns"}
+
+# Mechanization {orientation="columns"}
